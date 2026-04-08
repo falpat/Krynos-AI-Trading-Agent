@@ -1432,7 +1432,7 @@ def run_debate():
     return decision
 
 # ── Continuous loop ────────────────────────────────────────────────────────────
-def run_loop():F
+def run_loop():
     print("\n🚀 Krynos AI Starting...")
     print(f"   Mode:      {'PAPER TRADING' if PAPER_TRADING else '⚠️  LIVE TRADING'}")
     print(f"   Pair:      {TRADING_PAIR}")
