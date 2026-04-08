@@ -8,6 +8,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import krakenex
 from groq import Groq
+import pandas as pd
 from krynos_ai.kraken_cli import cli as kraken_cli, setup_instructions as cli_setup_instructions
 
 # ── Load environment variables ─────────────────────────────────────────────────
@@ -303,6 +304,60 @@ def get_all_trades(limit: int = 50) -> list:
     rows = c.fetchall()
     conn.close()
     return rows
+
+def get_trades_df():
+    """Get trades as pandas DataFrame (for dashboard)."""
+    conn = get_db_conn()
+    if not conn:
+        return pd.DataFrame()
+    try:
+        df = pd.read_sql_query(
+            "SELECT * FROM trades ORDER BY timestamp DESC LIMIT 200", conn)
+        conn.close()
+        if not df.empty:
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+def get_daily_summary():
+    """Get daily summary as pandas DataFrame (for dashboard)."""
+    conn = get_db_conn()
+    if not conn:
+        return pd.DataFrame()
+    try:
+        df = pd.read_sql_query(
+            "SELECT * FROM daily_summary ORDER BY date DESC LIMIT 14", conn)
+        conn.close()
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+def get_stats(df):
+    """Calculate trading statistics from trades DataFrame (for dashboard)."""
+    if df.empty:
+        return {"total": 0, "buys": 0, "sells": 0, "holds": 0,
+                "skipped": 0, "win_rate": 0, "avg_confidence": 0,
+                "avg_risk": 0, "circuit_active": False, "profitable_trades": 0,
+                "losing_trades": 0}
+    executed = df[df["status"].isin(["executed", "paper"])]
+    profitable = executed[executed["pnl"] > 0] if "pnl" in executed.columns else pd.DataFrame()
+    losing = executed[executed["pnl"] < 0] if "pnl" in executed.columns else pd.DataFrame()
+    total_executed = len(profitable) + len(losing)
+    return {
+        "total":             len(df),
+        "buys":              len(df[df["action"] == "BUY"]),
+        "sells":             len(df[df["action"] == "SELL"]),
+        "holds":             len(df[df["action"] == "HOLD"]),
+        "skipped":           len(df[df["status"].isin(["high_risk","low_confidence","draw"])]),
+        "win_rate":          round(len(profitable) / max(total_executed, 1) * 100, 1),
+        "profitable_trades": len(profitable),
+        "losing_trades":     len(losing),
+        "avg_confidence":    round(df["confidence"].mean() * 100, 1) if "confidence" in df else 0,
+        "avg_risk":          round(df["risk_score"].mean(), 1) if "risk_score" in df else 0,
+        "circuit_active":    False,
+    }
+
 
 # ── Technical Indicators ────────────────────────────────────────────────────────
 def compute_ema(closes: list, period: int) -> list:

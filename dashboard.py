@@ -14,6 +14,7 @@ import numpy as np
 import krakenex
 from dotenv import load_dotenv
 from krynos_ai.kraken_cli import cli as kraken_cli
+from krynos_ai.agent import get_trades_df, get_daily_summary, get_stats, get_db_conn
 
 load_dotenv()
 PRISM_API_KEY = os.environ.get("PRISM_API_KEY")
@@ -363,64 +364,13 @@ html, body, [class*="css"] {
 </style>
 """, unsafe_allow_html=True)
 
-# ── DB helpers ─────────────────────────────────────────────────────────────────
+
+# ── DB helpers (imported from agent.py) ────────────────────────────────────────
+# get_db_conn, get_trades_df, get_daily_summary, get_stats are imported from krynos_ai.agent
+
 def get_db_connection():
-    try:
-        conn = sqlite3.connect("krynos.db")
-        conn.row_factory = sqlite3.Row
-        return conn
-    except Exception:
-        return None
-
-def get_trades_df():
-    conn = get_db_connection()
-    if not conn:
-        return pd.DataFrame()
-    try:
-        df = pd.read_sql_query(
-            "SELECT * FROM trades ORDER BY timestamp DESC LIMIT 200", conn)
-        conn.close()
-        if not df.empty:
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-        return df
-    except Exception:
-        return pd.DataFrame()
-
-def get_daily_summary():
-    conn = get_db_connection()
-    if not conn:
-        return pd.DataFrame()
-    try:
-        df = pd.read_sql_query(
-            "SELECT * FROM daily_summary ORDER BY date DESC LIMIT 14", conn)
-        conn.close()
-        return df
-    except Exception:
-        return pd.DataFrame()
-
-def get_stats(df):
-    if df.empty:
-        return {"total": 0, "buys": 0, "sells": 0, "holds": 0,
-                "skipped": 0, "win_rate": 0, "avg_confidence": 0,
-                "avg_risk": 0, "circuit_active": False, "profitable_trades": 0,
-                "losing_trades": 0}
-    executed = df[df["status"].isin(["executed", "paper"])]
-    profitable = executed[executed["pnl"] > 0] if "pnl" in executed.columns else pd.DataFrame()
-    losing = executed[executed["pnl"] < 0] if "pnl" in executed.columns else pd.DataFrame()
-    total_executed = len(profitable) + len(losing)
-    return {
-        "total":             len(df),
-        "buys":              len(df[df["action"] == "BUY"]),
-        "sells":             len(df[df["action"] == "SELL"]),
-        "holds":             len(df[df["action"] == "HOLD"]),
-        "skipped":           len(df[df["status"].isin(["high_risk","low_confidence","draw"])]),
-        "win_rate":          round(len(profitable) / max(total_executed, 1) * 100, 1),
-        "profitable_trades": len(profitable),
-        "losing_trades":     len(losing),
-        "avg_confidence":    round(df["confidence"].mean() * 100, 1) if "confidence" in df else 0,
-        "avg_risk":          round(df["risk_score"].mean(), 1) if "risk_score" in df else 0,
-        "circuit_active":    False,
-    }
+    """Alias for get_db_conn() for backward compatibility."""
+    return get_db_conn()
 
 # ── Demo data fallback ─────────────────────────────────────────────────────────
 def generate_demo_data():
@@ -550,9 +500,13 @@ def main():
         </div>""", unsafe_allow_html=True)
 
     with c5:
-        st.markdown(f"""<div class="metric-card {'green' if stats['avg_confidence'] >= 60 else 'amber'}>
+        conf = stats['avg_confidence']
+
+        conf_color = "green" if conf >= 60 else "amber" if conf >= 40 else "red"
+
+        st.markdown(f"""<div class="metric-card {conf_color}">
             <div class="metric-label">Avg Confidence</div>
-            <div class="metric-value {'green-text' if stats['avg_confidence'] >= 60 else 'amber-text'}">{stats['avg_confidence']}%</div>
+            <div class="metric-value {conf_color}-text">{conf}%</div>
             <div class="metric-sub">Across all rounds</div>
         </div>""", unsafe_allow_html=True)
 
@@ -605,7 +559,7 @@ def main():
 
     st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-    # ── Charts row ───────────────────────────────────────────────────────────
+    # ── Charts row ────────────────────────────────────────────────────────────
     col_left, col_right = st.columns([3, 2])
 
     with col_left:
@@ -1199,4 +1153,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
