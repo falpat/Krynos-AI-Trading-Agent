@@ -13,7 +13,7 @@ import html as html_mod
 import numpy as np
 import krakenex
 from dotenv import load_dotenv
-from .kraken_cli import cli as kraken_cli
+from krynos_ai.kraken_cli import cli as kraken_cli
 
 load_dotenv()
 PRISM_API_KEY = os.environ.get("PRISM_API_KEY")

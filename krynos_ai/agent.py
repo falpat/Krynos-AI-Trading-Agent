@@ -8,7 +8,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import krakenex
 from groq import Groq
-from .kraken_cli import cli as kraken_cli, setup_instructions as cli_setup_instructions
+from krynos_ai.kraken_cli import cli as kraken_cli, setup_instructions as cli_setup_instructions
 
 # ── Load environment variables ─────────────────────────────────────────────────
 load_dotenv()
